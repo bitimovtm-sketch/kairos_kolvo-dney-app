@@ -83,13 +83,29 @@ app.post('/install', async (req, res) => {
   let realTypeId = null;
   try {
     const types = await callBitrix(restUrl, AUTH_ID, 'userfieldtype.list', {});
-    const found = (types || []).find((t) => String(t.USER_TYPE_ID).endsWith(`_${USER_TYPE_ID}`));
+    console.log('userfieldtype.list ответ:', JSON.stringify(types));
+    const list = Array.isArray(types) ? types : Object.values(types || {});
+    const found = list.find((t) => String(t.USER_TYPE_ID || '').endsWith(USER_TYPE_ID));
     realTypeId = found ? found.USER_TYPE_ID : null;
     log.push(realTypeId
       ? `Код типа определён: ${realTypeId}`
-      : 'Не удалось найти тип в списке — поля создать нельзя.');
+      : `Тип не найден. Список типов: ${JSON.stringify(list)}`);
   } catch (e) {
     log.push(`Список типов: ${e.message}`);
+  }
+
+  if (!realTypeId) {
+    // Запасной способ: собираем код сами из ID приложения
+    try {
+      const info = await callBitrix(restUrl, AUTH_ID, 'app.info', {});
+      console.log('app.info ответ:', JSON.stringify(info));
+      if (info && info.ID) {
+        realTypeId = `rest_${info.ID}_${USER_TYPE_ID}`;
+        log.push(`Код типа собран вручную: ${realTypeId}`);
+      }
+    } catch (e) {
+      log.push(`app.info: ${e.message}`);
+    }
   }
 
   if (!realTypeId) {
