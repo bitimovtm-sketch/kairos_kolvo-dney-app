@@ -55,8 +55,14 @@ app.post('/install', async (req, res) => {
     return res.send(installFinishHtml('Не хватает данных установки. Обновите страницу и попробуйте снова.'));
   }
 
-  const restUrl = SERVER_ENDPOINT;
+  const referer = req.headers.referer || req.headers.referrer || '';
+  const refererMatch = referer.match(/^https?:\/\/([^/]+)/);
+  const PORTAL_DOMAIN = refererMatch ? refererMatch[1] : null;
+
+  const restUrl = PORTAL_DOMAIN ? `https://${PORTAL_DOMAIN}/rest/` : SERVER_ENDPOINT;
   const handlerUrl = `https://${req.get('host')}/kolvo-dney-widget`;
+
+  console.log('INSTALL using restUrl:', restUrl);
 
   const log = [];
 
@@ -113,13 +119,18 @@ app.get('/install', (req, res) => {
 });
 
 async function callBitrix(restUrl, authId, method, fields) {
-  const response = await axios.post(`${restUrl}${method}`, fields, {
-    params: { auth: authId },
-  });
-  if (response.data.error) {
-    throw new Error(response.data.error_description || response.data.error);
+  try {
+    const response = await axios.post(`${restUrl}${method}`, fields, {
+      params: { auth: authId },
+    });
+    if (response.data.error) {
+      throw new Error(response.data.error_description || response.data.error);
+    }
+    return response.data.result;
+  } catch (e) {
+    const detail = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    throw new Error(detail);
   }
-  return response.data.result;
 }
 
 function installFinishHtml(message) {
