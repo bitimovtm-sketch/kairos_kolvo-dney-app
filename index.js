@@ -45,18 +45,17 @@ app.post('/install', async (req, res) => {
   // Логируем сырые данные — пригодится, если формат снова не совпадёт
   console.log('INSTALL request body:', JSON.stringify(req.body));
 
-  // Bitrix24 присылает данные установки в одном из двух форматов:
-  // 1) плоский: { DOMAIN, AUTH_ID, REFRESH_ID, ... }
-  // 2) вложенный: { auth: { domain, access_token, refresh_token, ... } }
-  const DOMAIN = req.body.DOMAIN || req.body?.auth?.domain;
+  // Bitrix24 в этом случае присылает SERVER_ENDPOINT (адрес для REST-запросов)
+  // и AUTH_ID (токен доступа) — портал определяется по токену, отдельный DOMAIN не нужен.
+  const SERVER_ENDPOINT = req.body.SERVER_ENDPOINT || req.body?.auth?.server_endpoint;
   const AUTH_ID = req.body.AUTH_ID || req.body?.auth?.access_token;
 
-  if (!DOMAIN || !AUTH_ID) {
-    console.log('INSTALL: не хватает DOMAIN/AUTH_ID в присланных данных');
+  if (!SERVER_ENDPOINT || !AUTH_ID) {
+    console.log('INSTALL: не хватает SERVER_ENDPOINT/AUTH_ID в присланных данных');
     return res.send(installFinishHtml('Не хватает данных установки. Обновите страницу и попробуйте снова.'));
   }
 
-  const restUrl = `https://${DOMAIN}/rest/`;
+  const restUrl = SERVER_ENDPOINT;
   const handlerUrl = `https://${req.get('host')}/kolvo-dney-widget`;
 
   const log = [];
