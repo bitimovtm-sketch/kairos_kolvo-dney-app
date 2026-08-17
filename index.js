@@ -65,18 +65,30 @@ app.post('/install', async (req, res) => {
   console.log('INSTALL using restUrl:', restUrl);
 
   const log = [];
+  const FIELD_LABEL = 'Количество дней в работе';
 
-  // 1. Регистрируем тип поля (если уже есть — просто пропускаем)
+  // 1. Регистрируем тип поля. Если он уже есть — обновляем название и высоту.
   try {
     await callBitrix(restUrl, AUTH_ID, 'userfieldtype.add', {
       USER_TYPE_ID,
       HANDLER: handlerUrl,
-      TITLE: 'Дней (просмотр)',
+      TITLE: FIELD_LABEL,
       DESCRIPTION: 'Только отображение значения, без редактирования',
+      OPTIONS: { height: 24 },
     });
     log.push('Тип поля зарегистрирован.');
   } catch (e) {
-    log.push(`Тип поля: ${e.message}`);
+    try {
+      await callBitrix(restUrl, AUTH_ID, 'userfieldtype.update', {
+        USER_TYPE_ID,
+        HANDLER: handlerUrl,
+        TITLE: FIELD_LABEL,
+        OPTIONS: { height: 24 },
+      });
+      log.push('Тип поля обновлён (название и высота).');
+    } catch (e2) {
+      log.push(`Тип поля: ${e2.message}`);
+    }
   }
 
   // 2. Узнаём НАСТОЯЩИЙ код типа — Bitrix24 превращает его в rest_<ID приложения>_<наш код>
@@ -113,39 +125,52 @@ app.post('/install', async (req, res) => {
     return res.send(installFinishHtml(log.join('<br>')));
   }
 
-  // 3. Создаём поле в Лидах
-  try {
-    await callBitrix(restUrl, AUTH_ID, 'crm.lead.userfield.add', {
-      fields: {
-        FIELD_NAME: 'KOLVO_DNEY_VIEW',
-        USER_TYPE_ID: realTypeId,
-        LABEL: 'Дней (просмотр)',
-        EDIT_FORM_LABEL: { ru: 'Дней (просмотр)' },
-      },
-    });
-    log.push('Поле в Лидах создано.');
-  } catch (e) {
-    log.push(`Поле в Лидах: ${e.message}`);
-  }
-
-  // 4. Создаём поле в Сделках
-  try {
-    await callBitrix(restUrl, AUTH_ID, 'crm.deal.userfield.add', {
-      fields: {
-        FIELD_NAME: 'KOLVO_DNEY_VIEW',
-        USER_TYPE_ID: realTypeId,
-        LABEL: 'Дней (просмотр)',
-        EDIT_FORM_LABEL: { ru: 'Дней (просмотр)' },
-      },
-    });
-    log.push('Поле в Сделках создано.');
-  } catch (e) {
-    log.push(`Поле в Сделках: ${e.message}`);
-  }
+  // 3-4. Создаём поля, а если они уже есть — переименовываем
+  await ensureField(restUrl, AUTH_ID, 'lead', realTypeId, FIELD_LABEL, log, 'Лидах');
+  await ensureField(restUrl, AUTH_ID, 'deal', realTypeId, FIELD_LABEL, log, 'Сделках');
 
   console.log('Установка kolvo-dney завершена:', log.join(' | '));
   res.send(installFinishHtml(log.join('<br>')));
 });
+
+// Создаёт поле, если его нет; если есть — обновляет название
+async function ensureField(restUrl, authId, entity, typeId, label, log, humanName) {
+  const fieldName = 'KOLVO_DNEY_VIEW';
+  const fullName = `UF_CRM_${fieldName}`;
+
+  try {
+    const existing = await callBitrix(restUrl, authId, `crm.${entity}.userfield.list`, {
+      filter: { FIELD_NAME: fullName },
+    });
+    const list = Array.isArray(existing) ? existing : Object.values(existing || {});
+
+    if (list.length > 0) {
+      await callBitrix(restUrl, authId, `crm.${entity}.userfield.update`, {
+        id: list[0].ID,
+        fields: {
+          LABEL: label,
+          EDIT_FORM_LABEL: { ru: label },
+          LIST_COLUMN_LABEL: { ru: label },
+        },
+      });
+      log.push(`Поле в ${humanName} переименовано.`);
+      return;
+    }
+
+    await callBitrix(restUrl, authId, `crm.${entity}.userfield.add`, {
+      fields: {
+        FIELD_NAME: fieldName,
+        USER_TYPE_ID: typeId,
+        LABEL: label,
+        EDIT_FORM_LABEL: { ru: label },
+        LIST_COLUMN_LABEL: { ru: label },
+      },
+    });
+    log.push(`Поле в ${humanName} создано.`);
+  } catch (e) {
+    log.push(`Поле в ${humanName}: ${e.message}`);
+  }
+}
 
 // Bitrix24 иногда открывает /install через GET при повторном заходе
 app.get('/install', (req, res) => {
@@ -216,8 +241,8 @@ app.all('/kolvo-dney-widget', async (req, res) => {
 });
 
 function renderHtml(text) {
-  return `<!DOCTYPE html><html><body style="margin:0;padding:6px 10px;
-    font-family:Arial,sans-serif;font-size:13px;color:#333;">${text}</body></html>`;
+  return `<!DOCTYPE html><html><body style="margin:0;padding:2px 6px;
+    font-family:Arial,sans-serif;font-size:13px;line-height:18px;color:#333;">${text}</body></html>`;
 }
 
 // ---------------------------------------------------------------------------
