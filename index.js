@@ -76,37 +76,55 @@ app.post('/install', async (req, res) => {
     });
     log.push('Тип поля зарегистрирован.');
   } catch (e) {
-    log.push(`Тип поля: ${e.message} (возможно, уже был зарегистрирован раньше — это нормально).`);
+    log.push(`Тип поля: ${e.message}`);
   }
 
-  // 2. Создаём поле в Лидах
+  // 2. Узнаём НАСТОЯЩИЙ код типа — Bitrix24 превращает его в rest_<ID приложения>_<наш код>
+  let realTypeId = null;
+  try {
+    const types = await callBitrix(restUrl, AUTH_ID, 'userfieldtype.list', {});
+    const found = (types || []).find((t) => String(t.USER_TYPE_ID).endsWith(`_${USER_TYPE_ID}`));
+    realTypeId = found ? found.USER_TYPE_ID : null;
+    log.push(realTypeId
+      ? `Код типа определён: ${realTypeId}`
+      : 'Не удалось найти тип в списке — поля создать нельзя.');
+  } catch (e) {
+    log.push(`Список типов: ${e.message}`);
+  }
+
+  if (!realTypeId) {
+    console.log('Установка kolvo-dney НЕ завершена:', log.join(' | '));
+    return res.send(installFinishHtml(log.join('<br>')));
+  }
+
+  // 3. Создаём поле в Лидах
   try {
     await callBitrix(restUrl, AUTH_ID, 'crm.lead.userfield.add', {
       fields: {
         FIELD_NAME: 'KOLVO_DNEY_VIEW',
-        USER_TYPE_ID,
+        USER_TYPE_ID: realTypeId,
         LABEL: 'Дней (просмотр)',
         EDIT_FORM_LABEL: { ru: 'Дней (просмотр)' },
       },
     });
     log.push('Поле в Лидах создано.');
   } catch (e) {
-    log.push(`Поле в Лидах: ${e.message} (возможно, уже создано раньше).`);
+    log.push(`Поле в Лидах: ${e.message}`);
   }
 
-  // 3. Создаём поле в Сделках
+  // 4. Создаём поле в Сделках
   try {
     await callBitrix(restUrl, AUTH_ID, 'crm.deal.userfield.add', {
       fields: {
         FIELD_NAME: 'KOLVO_DNEY_VIEW',
-        USER_TYPE_ID,
+        USER_TYPE_ID: realTypeId,
         LABEL: 'Дней (просмотр)',
         EDIT_FORM_LABEL: { ru: 'Дней (просмотр)' },
       },
     });
     log.push('Поле в Сделках создано.');
   } catch (e) {
-    log.push(`Поле в Сделках: ${e.message} (возможно, уже создано раньше).`);
+    log.push(`Поле в Сделках: ${e.message}`);
   }
 
   console.log('Установка kolvo-dney завершена:', log.join(' | '));
