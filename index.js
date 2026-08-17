@@ -42,9 +42,17 @@ const GET_METHOD = {
 // ---------------------------------------------------------------------------
 
 app.post('/install', async (req, res) => {
-  const { DOMAIN, AUTH_ID } = req.body;
+  // Логируем сырые данные — пригодится, если формат снова не совпадёт
+  console.log('INSTALL request body:', JSON.stringify(req.body));
+
+  // Bitrix24 присылает данные установки в одном из двух форматов:
+  // 1) плоский: { DOMAIN, AUTH_ID, REFRESH_ID, ... }
+  // 2) вложенный: { auth: { domain, access_token, refresh_token, ... } }
+  const DOMAIN = req.body.DOMAIN || req.body?.auth?.domain;
+  const AUTH_ID = req.body.AUTH_ID || req.body?.auth?.access_token;
 
   if (!DOMAIN || !AUTH_ID) {
+    console.log('INSTALL: не хватает DOMAIN/AUTH_ID в присланных данных');
     return res.send(installFinishHtml('Не хватает данных установки. Обновите страницу и попробуйте снова.'));
   }
 
