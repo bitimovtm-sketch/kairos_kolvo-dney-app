@@ -1,0 +1,13 @@
+{
+  "name": "kolvo-dney-app",
+  "version": "1.0.0",
+  "description": "Read-only поле 'Дней' для лидов и сделок в Bitrix24",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "axios": "^1.7.2"
+  }
+}
